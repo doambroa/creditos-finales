@@ -259,10 +259,15 @@ details.manual[open] summary{margin-bottom:10px}
 .detail dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:15px}
 .detail dt{color:var(--muted)}
 .detail dd{margin:0}
-.modal .wcard.wide{width:min(1080px,100%)}
-.split{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:26px;align-items:start}
-@media(max-width:880px){.split{grid-template-columns:1fr}}
-.social{background:var(--bg2);border:1px solid var(--line);border-radius:18px;padding:16px;position:sticky;top:12px}
+.mstack{display:grid;grid-template-columns:1fr minmax(0,640px) 1fr;gap:28px;width:100%;align-items:start}
+.mstack>.wcard{grid-column:2;width:100%}
+.mstack>.social{grid-column:3;justify-self:start;width:100%;max-width:380px}
+@media(max-width:1380px){.mstack{grid-template-columns:minmax(0,640px) minmax(300px,380px);justify-content:center}.mstack>.wcard{grid-column:1}.mstack>.social{grid-column:2}}
+@media(max-width:1020px){.mstack{grid-template-columns:minmax(0,640px)}.mstack>.social{grid-column:1;max-width:none;position:static}}
+.social{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:18px;position:sticky;top:0;box-shadow:0 30px 80px #000a;animation:socIn .45s .12s both cubic-bezier(.2,.9,.3,1.15)}
+@keyframes socIn{from{opacity:0;transform:translateX(40px) rotate(2deg)}to{opacity:1;transform:none}}
+@media(max-width:1020px){@keyframes socIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}}
+.social .cm1 .bd,.social .rec,.social .cform textarea{background:var(--bg2)}
 .social h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
 .social h3 small{color:var(--muted);font-weight:400}
 .social .av{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:900;font-size:13px;color:#0d0a18;text-transform:uppercase}
@@ -721,9 +726,8 @@ function openDetail(id){
   const h = g.hltb;
   const m = $('#modal');
   const social = ME && VIEWING;
-  m.innerHTML = `<div class="wcard detail ${social ? 'wide' : ''}">
+  m.innerHTML = `${social ? '<div class="mstack">' : ''}<div class="wcard detail">
     <div class="hero" style="height:220px;${heroOf(g) ? `background-image:url('${esc(heroOf(g))}')` : ''}"></div>
-    <div class="${social ? 'split' : ''}"><div>
     <div class="wtop" style="margin-top:-8px"><b style="font-size:24px;line-height:1.2">${esc(g.title)}</b><button class="x" data-c>✕</button></div>
     ${tags.length ? `<div class="chips">${tags.map(t => `<span class="chip" style="padding:6px 12px">${t}</span>`).join('')}</div>` : ''}
     <dl>
@@ -733,12 +737,11 @@ function openDetail(id){
       <dt>Tema favorito</dt><dd>${g.song?.title ? esc(g.song.title) + ' ' + (g.song.videoId ? '<button class="linkbtn" id="dPlay">▶ Escuchar</button>' : `<a class="linkbtn" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${encodeURIComponent(g.title + ' ' + g.song.title)}">▶ Buscar en YouTube</a>`) : '—'}</dd>
     </dl>
     ${g.comment ? `<div class="cm">${esc(g.comment)}</div>` : ''}
-    </div>${social ? '<aside class="social" id="soc"></aside>' : ''}</div>
-  </div>`;
+  </div>${social ? '<aside class="social" id="soc"></aside></div>' : ''}`;
   m.classList.add('show');
   if (social) mountSocial(m.querySelector('#soc'), VIEWING.user, VIEWING.display, g);
   m.querySelector('[data-c]').onclick = () => m.classList.remove('show');
-  m.onclick = e => { if (e.target === m) m.classList.remove('show'); };
+  m.onclick = e => { if (e.target === m || e.target.classList.contains('mstack')) m.classList.remove('show'); };
   m.querySelector('#dPlay')?.addEventListener('click', () => playSong(g.song.videoId, g.song.title));
 }
 
@@ -1242,9 +1245,8 @@ function openEdit(id){
   const Y = yearObj(curYear), g = Y.games.find(x => x.id === id); if (!g) return;
   const m = $('#modal');
   const social = !!ME && !VIEWING;
-  m.innerHTML = `<div class="wcard ${social ? 'wide' : ''}">
+  m.innerHTML = `${social ? '<div class="mstack">' : ''}<div class="wcard">
     <div class="hero" style="height:200px;${heroOf(g) ? `background-image:url('${esc(heroOf(g))}')` : ''}"></div>
-    <div class="${social ? 'split' : ''}"><div>
     <div class="wtop" style="margin-top:-8px"><b style="font-size:22px">${esc(g.title)}</b><button class="x" data-c>✕</button></div>
     <label class="field"><span>Título</span><input id="eT" value="${esc(g.title)}"></label>
     <div class="field"><span>Imagen</span><div class="row"><input id="eQ" class="addline" style="flex:1" placeholder="Buscar otra imagen…" value="${esc(g.title)}"><button class="btn sm" id="eS">Buscar</button></div><div class="imgpick" id="eP"></div></div>
@@ -1262,15 +1264,14 @@ function openEdit(id){
       <label class="chip" style="padding:8px 14px"><input type="checkbox" id="eW" ${inList(Y.worst, g.title) ? 'checked' : ''}> 💀 Menos disfrutados</label>
     </div>
     <div class="wnav"><button class="btn danger" id="eDel">🗑 Borrar</button><div class="row">${g.song?.videoId ? '<button class="btn ghost" id="ePlay">▶ Escuchar</button>' : ''}<button class="btn primary" id="eOk">Guardar</button></div></div>
-    </div>${social ? '<aside class="social" id="soc"></aside>' : ''}</div>
-  </div>`;
+  </div>${social ? '<aside class="social" id="soc"></aside></div>' : ''}`;
   m.classList.add('show');
   if (social) mountSocial(m.querySelector('#soc'), ME.user, ME.display || ME.user, g, {
     onUse: r => { m.querySelector('#eST').value = r.title; m.querySelector('#eSU').value = r.videoId ? 'https://youtu.be/' + r.videoId : ''; toast('Puesto como tu tema favorito: pulsa Guardar'); }
   });
   const close = () => { m.classList.remove('show'); };
   m.querySelector('[data-c]').onclick = close;
-  m.onclick = e => { if (e.target === m) close(); };
+  m.onclick = e => { if (e.target === m || e.target.classList.contains('mstack')) close(); };
   m.querySelector('#ePlay')?.addEventListener('click', () => playSong(g.song.videoId, g.song.title));
   // desplegable de la banda sonora, igual que en el alta
   const pk = m.querySelector('#ePk');
