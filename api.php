@@ -507,10 +507,10 @@ switch ($action) {
     });
     out($view);
 
-  case 'rec_del':         // POST {owner, id, user}: la quita quien la hizo o el dueño del juego
+  case 'rec_del':         // POST {owner, id}: solo la quita quien la hizo (el dueño del juego no puede)
     $me = requireUser(); $b = body();
     $owner = strtolower(trim($b['owner'] ?? '')); $gid = (string)($b['id'] ?? ''); $who = strtolower((string)($b['user'] ?? $me));
-    if ($who !== $me && $owner !== $me) out(['error' => 'No puedes quitar la recomendación de otro'], 403);
+    if ($who !== $me) out(['error' => 'Solo quien recomendó el tema puede quitarlo'], 403);
     $k = socialKey($owner, $gid); $view = null;
     socialTx(function (&$db) use ($k, $who, &$view) {
       $db[$k]['recs'] = array_values(array_filter($db[$k]['recs'] ?? [], fn($r) => $r['user'] !== $who));

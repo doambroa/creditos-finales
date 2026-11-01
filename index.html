@@ -293,6 +293,8 @@ details.manual[open] summary{margin-bottom:10px}
 .rpk{margin-top:10px}
 .rpk .songs{max-height:220px}
 .badge2{background:#ffffff1a;border-radius:8px;padding:0 6px}
+.undobar{display:flex;align-items:center;gap:12px;justify-content:space-between;background:#2b2410;border:1px solid var(--gold);border-radius:12px;padding:10px 12px;margin:-4px 0 16px;font-size:14px;animation:pop .35s both}
+.undobar[hidden]{display:none}
 @media (hover:none){.cform .hint{visibility:hidden}}
 .detail .cm{background:var(--bg2);border-radius:14px;padding:14px 16px;margin-top:16px;line-height:1.5;white-space:pre-wrap}
 </style>
@@ -805,7 +807,7 @@ function mountSocial(el, owner, ownerDisplay, g, opts = {}){
         <div class="tt"><b title="${esc(r.title)}">${esc(r.title)}</b><small>${r.user === ME.user ? '<span class="mine">tu recomendación</span>' : 'de ' + esc(r.display || r.user)} · ${esc(ago(r.ts))}</small></div>
         ${r.videoId ? `<button class="btn sm ghost" data-playr="${esc(r.user)}" title="Escuchar">▶</button>` : `<a class="btn sm ghost" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${encodeURIComponent(g.title + ' ' + r.title)}" title="Buscar en YouTube">▶</a>`}
         ${isOwner && opts.onUse ? `<button class="btn sm ghost" data-user="${esc(r.user)}" title="Usarlo como mi tema favorito">⭐</button>` : ''}
-        ${r.user === ME.user || isOwner ? `<button class="xs" data-delr="${esc(r.user)}" title="Quitar">✕</button>` : ''}</div>`).join('')
+        ${r.user === ME.user ? `<button class="xs" data-delr="${esc(r.user)}" title="Quitar mi recomendación">✕</button>` : ''}</div>`).join('')
       : `<p class="socempty">${isOwner ? 'Nadie te ha recomendado temas de este juego.' : 'Nadie ha recomendado nada aún.'}</p>`;
     const mine = data.recs.find(r => r.user === ME.user);
     const rb = el.querySelector('[data-rec]'); if (rb && el.querySelector('.rpk').style.display === 'none') rb.textContent = mine ? '🎵 Cambiar mi recomendación' : '🎵 Recomiéndale un tema';
@@ -823,7 +825,7 @@ function mountSocial(el, owner, ownerDisplay, g, opts = {}){
     const dc = e.target.closest('[data-delc]'), dr = e.target.closest('[data-delr]'), pr = e.target.closest('[data-playr]'), us = e.target.closest('[data-user]');
     try {
       if (dc){ if (confirm('¿Borrar este comentario?')) sync(await api('comment_del', {body: {owner, id: g.id, cid: dc.dataset.delc}})); }
-      else if (dr){ sync(await api('rec_del', {body: {owner, id: g.id, user: dr.dataset.delr}})); }
+      else if (dr){ if (confirm('¿Quitar tu recomendación de este tema?')) sync(await api('rec_del', {body: {owner, id: g.id, user: dr.dataset.delr}})); }
       else if (pr){ const r = data.recs.find(x => x.user === pr.dataset.playr); if (r?.videoId) playSong(r.videoId, r.title); }
       else if (us){ const r = data.recs.find(x => x.user === us.dataset.user); if (r) opts.onUse(r); }
     } catch (err) { toast(err.message); }
@@ -1256,6 +1258,7 @@ function openEdit(id){
     <label class="field"><span>…o fecha aproximada</span><input id="eDT" value="${esc(g.dateText || '')}" placeholder="verano, noviembre…"></label></div>
     <div class="two"><div class="field"><span style="display:flex;justify-content:space-between">Tema favorito ${CFG.youtube ? '<button type="button" class="linkbtn" id="eOst">🎵 Elegir de la banda sonora ▾</button>' : ''}</span><input id="eST" value="${esc(g.song?.title || '')}" autocomplete="off"></div>
     <label class="field"><span>Enlace YouTube del tema</span><input id="eSU" value="${g.song?.videoId ? 'https://youtu.be/' + g.song.videoId : ''}"></label></div>
+    <div class="undobar" id="eUndo" hidden><span></span><button type="button" class="btn sm" id="eUndoBtn">↶ Deshacer</button></div>
     ${CFG.youtube ? `<div class="picker" id="ePk" style="display:none;margin:-4px 0 16px">${songPickerHTML(g.title)}</div>` : ''}
     <label class="field"><span>Comentario</span><textarea id="eC" rows="4">${esc(g.comment || '')}</textarea></label>
     <div class="row" style="margin-bottom:6px">
@@ -1267,7 +1270,25 @@ function openEdit(id){
   </div>${social ? '<aside class="social" id="soc"></aside></div>' : ''}`;
   m.classList.add('show');
   if (social) mountSocial(m.querySelector('#soc'), ME.user, ME.display || ME.user, g, {
-    onUse: r => { m.querySelector('#eST').value = r.title; m.querySelector('#eSU').value = r.videoId ? 'https://youtu.be/' + r.videoId : ''; toast('Puesto como tu tema favorito: pulsa Guardar'); }
+    onUse: r => {
+      const st = m.querySelector('#eST'), su = m.querySelector('#eSU');
+      undoStack.push({t: st.value, u: su.value});
+      st.value = r.title; su.value = r.videoId ? 'https://youtu.be/' + r.videoId : '';
+      paintUndo(`⭐ Tema cambiado a «${r.title}» (de ${r.display || r.user}). No se guarda hasta que pulses Guardar.`);
+    }
+  });
+  // deshacer la ⭐: barra con botón y Ctrl+Z (fuera de los campos de texto, que tienen su propio deshacer)
+  const undoStack = [];
+  const paintUndo = msg => { const b = m.querySelector('#eUndo'); b.hidden = !undoStack.length; if (msg) b.querySelector('span').textContent = msg; };
+  const doUndo = () => {
+    const prev = undoStack.pop(); if (!prev) return false;
+    m.querySelector('#eST').value = prev.t; m.querySelector('#eSU').value = prev.u;
+    paintUndo(undoStack.length ? 'Tema anterior restaurado. Aún puedes deshacer otro cambio.' : '');
+    toast('↶ Tema restaurado: «' + (prev.t || 'sin tema') + '»'); return true;
+  };
+  m.querySelector('#eUndoBtn').onclick = doUndo;
+  m.onkeydown = (e => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName) && undoStack.length){ e.preventDefault(); doUndo(); }
   });
   const close = () => { m.classList.remove('show'); };
   m.querySelector('[data-c]').onclick = close;
