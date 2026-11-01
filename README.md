@@ -23,7 +23,7 @@ Si las búsquedas fallan en Windows, revisa que en `php.ini` esté `curl.cainfo`
 - Estando dentro, todos ven a todos: columna «La pandilla» a la izquierda. Pinchando un juego de otro se ve su ficha (nota, horas, tema, comentario).
 - El interruptor «Lista pública» de tu cuenta sólo sirve para enseñarla a gente SIN cuenta con el enlace `?u=usuario`.
 - Pon un `invite_code` en `config.php` si quieres que nadie más pueda registrarse.
-- En la ficha de un juego de otro colega, a la derecha, puedes **comentarle** y **recomendarle el tema** de la banda sonora que te parece mejor. En tus propios juegos ves lo que te han dicho, puedes contestar y, con ⭐, usar un tema recomendado como el tuyo. Las tarjetas muestran 💬 y 🎶 cuando hay algo. Se guarda en `data/social.json`.
+- En la ficha de un juego de otro colega, a la derecha, puedes **comentarle** y **recomendarle el tema** de la banda sonora que te parece mejor. En tus propios juegos ves lo que te han dicho, puedes contestar y, con ⭐, usar un tema recomendado como el tuyo (con «Deshacer» o Ctrl+Z por si te equivocas). Las recomendaciones solo las puede quitar quien las hizo. Las tarjetas muestran 💬 y 🎶 cuando hay algo. Se guarda en `data/social.json`.
 - `data/` está bloqueada desde el navegador (.htaccess). Las carátulas se guardan en `covers/`.
 
 ## Copia de pruebas
