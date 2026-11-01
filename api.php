@@ -9,14 +9,16 @@ header('Cache-Control: no-store');
 session_set_cookie_params(['lifetime' => 60 * 60 * 24 * 90, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax',
   'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')]);
 ini_set('session.gc_maxlifetime', 60 * 60 * 24 * 90);
-session_name('creditos');
+$cfg    = file_exists(__DIR__ . '/config.php') ? (require __DIR__ . '/config.php') : [];
+// una copia de pruebas en el mismo servidor usa otro nombre de sesión para no mezclarse con la de verdad
+session_name(preg_replace('/[^A-Za-z0-9_]/', '', $cfg['session_name'] ?? 'creditos') ?: 'creditos');
 session_start();
 
-$cfg    = file_exists(__DIR__ . '/config.php') ? (require __DIR__ . '/config.php') : [];
 $DIR    = __DIR__ . '/data';
 $CACHE  = $DIR . '/cache';
 $COVERS = __DIR__ . '/covers';
 $USERS  = $DIR . '/users.json';
+$SOCIAL = $DIR . '/social.json';   // comentarios y temas recomendados por los colegas
 $action = $_GET['action'] ?? '';
 if (!function_exists('str_starts_with')) { function str_starts_with($h, $n) { return strncmp($h, $n, strlen($n)) === 0; } }
 if (!function_exists('str_contains'))    { function str_contains($h, $n) { return $n === '' || strpos($h, $n) !== false; } }
@@ -272,6 +274,41 @@ function ostPlaylists($game) {
   return $res;
 }
 
+/* ---------- comentarios y temas recomendados (data/social.json) ---------- */
+// clave: "<dueño>/<id del juego>" → ['comments' => [...], 'recs' => [...]]
+function socialTx(callable $fn) {
+  global $SOCIAL; ensureDir();
+  $fp = fopen($SOCIAL, 'c+');
+  if (!$fp) out(['error' => 'No se pudo abrir social.json'], 500);
+  flock($fp, LOCK_EX);
+  $db = json_decode(stream_get_contents($fp) ?: '{}', true) ?: [];
+  $res = $fn($db);
+  if ($res !== false) {
+    ftruncate($fp, 0); rewind($fp);
+    fwrite($fp, json_encode($db, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    fflush($fp);
+  }
+  flock($fp, LOCK_UN); fclose($fp);
+  return $res;
+}
+function socialRead() {
+  global $SOCIAL;
+  if (!file_exists($SOCIAL)) return [];
+  $fp = fopen($SOCIAL, 'r'); flock($fp, LOCK_SH);
+  $db = json_decode(stream_get_contents($fp) ?: '{}', true) ?: [];
+  flock($fp, LOCK_UN); fclose($fp);
+  return $db;
+}
+// el juego tiene que existir en la lista de su dueño
+function findGame($owner, $gid) {
+  if (!validName($owner) || !isset(users()[$owner])) out(['error' => 'Ese usuario no existe'], 404);
+  $db = readJson(userFile($owner), ['years' => []]);
+  foreach (($db['years'] ?? []) as $y) foreach (($y['games'] ?? []) as $g) if (($g['id'] ?? null) === $gid) return $g;
+  out(['error' => 'Ese juego ya no está en su lista'], 404);
+}
+function socialKey($owner, $gid) { return $owner . '/' . $gid; }
+function socialView($entry) { return ['comments' => array_values($entry['comments'] ?? []), 'recs' => array_values($entry['recs'] ?? [])]; }
+
 /* ---------- resúmenes de colegas ---------- */
 function summary($name, $info) {
   $db = readJson(userFile($name), ['years' => []]);
@@ -404,6 +441,83 @@ switch ($action) {
     foreach (users() as $name => $info) $res[] = summary($name, $info);
     usort($res, fn($a, $b) => $b['updated'] <=> $a['updated']);
     out($res);
+
+  /* ---------- comentarios y temas recomendados ---------- */
+  case 'social':          // GET owner, id
+    requireUser();
+    $owner = strtolower(trim($_GET['owner'] ?? '')); $gid = (string)($_GET['id'] ?? '');
+    findGame($owner, $gid);
+    out(socialView(socialRead()[socialKey($owner, $gid)] ?? []));
+
+  case 'social_summary':  // GET owner → { idJuego: {c, r} }
+    requireUser();
+    $owner = strtolower(trim($_GET['owner'] ?? ''));
+    $res = new stdClass();
+    foreach (socialRead() as $k => $e) {
+      if (strpos($k, $owner . '/') !== 0) continue;
+      $c = count($e['comments'] ?? []); $r = count($e['recs'] ?? []);
+      if ($c || $r) $res->{substr($k, strlen($owner) + 1)} = ['c' => $c, 'r' => $r];
+    }
+    out($res);
+
+  case 'comment':         // POST {owner, id, text}
+    $me = requireUser(); $b = body(); $all = users();
+    $owner = strtolower(trim($b['owner'] ?? '')); $gid = (string)($b['id'] ?? '');
+    $text = trim(preg_replace('/\r\n?/', "\n", (string)($b['text'] ?? '')));
+    if ($text === '') out(['error' => 'El comentario está vacío'], 400);
+    if (mb_strlen($text) > 1000) out(['error' => 'Máximo 1000 caracteres'], 400);
+    findGame($owner, $gid);
+    $k = socialKey($owner, $gid); $view = null;
+    socialTx(function (&$db) use ($k, $me, $all, $text, &$view) {
+      $db[$k]['comments'][] = ['id' => bin2hex(random_bytes(6)), 'user' => $me, 'display' => display($me, $all[$me]), 'text' => $text, 'ts' => date('c')];
+      $db[$k]['recs'] ??= [];
+      $view = socialView($db[$k]);
+    });
+    out($view);
+
+  case 'comment_del':     // POST {owner, id, cid}: lo borra quien lo escribió o el dueño del juego
+    $me = requireUser(); $b = body();
+    $owner = strtolower(trim($b['owner'] ?? '')); $gid = (string)($b['id'] ?? ''); $cid = (string)($b['cid'] ?? '');
+    $k = socialKey($owner, $gid); $view = null; $err = null;
+    socialTx(function (&$db) use ($k, $me, $owner, $cid, &$view, &$err) {
+      $list = $db[$k]['comments'] ?? [];
+      foreach ($list as $i => $c) if ($c['id'] === $cid) {
+        if ($c['user'] !== $me && $owner !== $me) { $err = 'Solo puede borrarlo quien lo escribió o el dueño del juego'; return false; }
+        array_splice($list, $i, 1); $db[$k]['comments'] = $list; $view = socialView($db[$k]); return true;
+      }
+      $view = socialView($db[$k] ?? []); return false;
+    });
+    if ($err) out(['error' => $err], 403);
+    out($view);
+
+  case 'rec':             // POST {owner, id, title, videoId}: un tema recomendado por colega y juego
+    $me = requireUser(); $b = body(); $all = users();
+    $owner = strtolower(trim($b['owner'] ?? '')); $gid = (string)($b['id'] ?? '');
+    if ($owner === $me) out(['error' => 'Tus propios juegos no se recomiendan a ti mismo 😉'], 400);
+    $title = trim((string)($b['title'] ?? '')); $vid = (string)($b['videoId'] ?? '');
+    if ($title === '' || mb_strlen($title) > 200) out(['error' => 'Falta el nombre del tema'], 400);
+    if ($vid !== '' && !preg_match('/^[\w-]{11}$/', $vid)) out(['error' => 'Enlace de YouTube no válido'], 400);
+    findGame($owner, $gid);
+    $k = socialKey($owner, $gid); $view = null;
+    socialTx(function (&$db) use ($k, $me, $all, $title, $vid, &$view) {
+      $recs = array_values(array_filter($db[$k]['recs'] ?? [], fn($r) => $r['user'] !== $me));
+      $recs[] = ['user' => $me, 'display' => display($me, $all[$me]), 'title' => $title, 'videoId' => $vid ?: null, 'ts' => date('c')];
+      $db[$k]['recs'] = $recs; $db[$k]['comments'] ??= [];
+      $view = socialView($db[$k]);
+    });
+    out($view);
+
+  case 'rec_del':         // POST {owner, id, user}: la quita quien la hizo o el dueño del juego
+    $me = requireUser(); $b = body();
+    $owner = strtolower(trim($b['owner'] ?? '')); $gid = (string)($b['id'] ?? ''); $who = strtolower((string)($b['user'] ?? $me));
+    if ($who !== $me && $owner !== $me) out(['error' => 'No puedes quitar la recomendación de otro'], 403);
+    $k = socialKey($owner, $gid); $view = null;
+    socialTx(function (&$db) use ($k, $who, &$view) {
+      $db[$k]['recs'] = array_values(array_filter($db[$k]['recs'] ?? [], fn($r) => $r['user'] !== $who));
+      $db[$k]['comments'] ??= [];
+      $view = socialView($db[$k]);
+    });
+    out($view);
 
   case 'view':
     requireUser();

@@ -259,6 +259,36 @@ details.manual[open] summary{margin-bottom:10px}
 .detail dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:15px}
 .detail dt{color:var(--muted)}
 .detail dd{margin:0}
+.modal .wcard.wide{width:min(1080px,100%)}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:26px;align-items:start}
+@media(max-width:880px){.split{grid-template-columns:1fr}}
+.social{background:var(--bg2);border:1px solid var(--line);border-radius:18px;padding:16px;position:sticky;top:12px}
+.social h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:8px}
+.social h3 small{color:var(--muted);font-weight:400}
+.social .av{width:30px;height:30px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:900;font-size:13px;color:#0d0a18;text-transform:uppercase}
+.clist{display:flex;flex-direction:column;gap:10px;max-height:320px;overflow:auto;margin-bottom:10px}
+.cm1{display:flex;gap:10px}
+.cm1 .bd{flex:1;min-width:0;background:var(--panel);border-radius:4px 14px 14px 14px;padding:8px 12px}
+.cm1 .bd p{margin:4px 0 0;white-space:pre-wrap;word-wrap:break-word;line-height:1.4;font-size:14px}
+.cm1 .bd small{color:var(--muted);font-size:11px}
+.cm1.own .bd{border:1px solid #ffcc3355}
+.xs{border:0;background:none;color:var(--muted);font-size:12px;padding:0 0 0 6px;float:right}
+.xs:hover{color:var(--bad)}
+.cform{display:flex;flex-direction:column;gap:6px}
+.cform textarea{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 12px;resize:vertical;min-height:62px;font:inherit;font-size:14px}
+.cform textarea:focus{outline:none;border-color:var(--gold)}
+.cform .row{justify-content:space-between}
+.rlist{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.rec{display:flex;gap:10px;align-items:center;background:var(--panel);border-radius:12px;padding:8px 10px}
+.rec .tt{flex:1;min-width:0}
+.rec .tt b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec .tt small{color:var(--muted);font-size:12px}
+.rec .mine{color:var(--gold)}
+.socempty{color:var(--muted);font-size:13px;margin:0 0 10px}
+.rpk{margin-top:10px}
+.rpk .songs{max-height:220px}
+.badge2{background:#ffffff1a;border-radius:8px;padding:0 6px}
+@media (hover:none){.cform .hint{visibility:hidden}}
 .detail .cm{background:var(--bg2);border-radius:14px;padding:14px 16px;margin-top:16px;line-height:1.5;white-space:pre-wrap}
 </style>
 </head>
@@ -341,7 +371,8 @@ details.manual[open] summary{margin-bottom:10px}
 /* ================= estado y utilidades ================= */
 const API = 'api.php';
 const LISTS = [['abandonados','🪦 Abandonados'],['retomar','🔁 Pienso retomarlos'],['enCurso','🎮 En curso'],['pendientes','📦 Pendientes']];
-let LS_KEY = 'creditos-finales-cache';
+const LS_NS = location.pathname.includes('/dev/') ? 'dev:' : '';   // la copia de pruebas no pisa la caché de la de verdad
+let LS_KEY = LS_NS + 'creditos-finales-cache';
 let DB = {version:1, years:{}};
 let CFG = {rawg:false, youtube:false, needsInvite:false};
 let ME = null;                                   // {user, public}
@@ -397,7 +428,7 @@ async function boot(){
   } catch (e) {
     if (VIEW) return loadPublic(VIEW);
     // servidor caído: tiramos de la última caché conocida
-    const last = (() => { try { return localStorage.getItem('creditos-last-user'); } catch { return null; } })();
+    const last = (() => { try { return localStorage.getItem(LS_NS + 'creditos-last-user'); } catch { return null; } })();
     if (last){ setMe({user: last, public: false}); DB = lsGet() || DB; setOnline(false); $('#sync').textContent = 'Modo sin conexión (caché local)'; yearObj(curYear); render(); return; }
     return showAuth();
   }
@@ -405,8 +436,8 @@ async function boot(){
 }
 
 function setMe(m){
-  ME = m; LS_KEY = 'creditos-finales-cache:' + m.user;
-  try { localStorage.setItem('creditos-last-user', m.user); } catch {}
+  ME = m; LS_KEY = LS_NS + 'creditos-finales-cache:' + m.user;
+  try { localStorage.setItem(LS_NS + 'creditos-last-user', m.user); } catch {}
   $('#whoName').textContent = m.display || m.user; $('#whoAv').textContent = m.user[0];
   $('#whoAv').style.background = avColor(m.user);
   $('#auth').classList.remove('show');
@@ -555,7 +586,7 @@ $('#who').onclick = () => {
   };
   m.querySelector('#kOut').onclick = async () => {
     try { await api('logout'); } catch {}
-    try { localStorage.removeItem('creditos-last-user'); } catch {}
+    try { localStorage.removeItem(LS_NS + 'creditos-last-user'); } catch {}
     ME = null; VIEWING = null; MYDB = null; RO = false; document.body.classList.remove('ro');
     DB = {version:1, years:{}}; GANG = []; $('#gang').innerHTML = ''; m.classList.remove('show'); render(); showAuth();
   };
@@ -601,6 +632,7 @@ const RLABEL = {0:'Un horror absoluto',0.5:'Casi un horror',1:'Malo',1.5:'Flojil
 
 /* ================= render principal ================= */
 function render(){
+  ensureSocialSummary();
   const ys = new Set(Object.keys(DB.years)); ys.add(String(new Date().getFullYear()));
   $('#years').innerHTML = [...ys].sort((a,b) => b - a).map(y => `<button class="year ${y === curYear ? 'on' : ''}" data-y="${y}">${y}</button>`).join('');
   const Y = yearObj(curYear);
@@ -623,7 +655,7 @@ function render(){
       <div class="shade"></div>
       <div class="badges">${best ? '<span class="badge best">🏆 Top</span>' : ''}${worst ? '<span class="badge worst">💀 Meh</span>' : ''}${g.replayed ? '<span class="badge rep">↻ Rejugado</span>' : ''}</div>
       <div class="info"><div class="t">${esc(g.title)}</div>${starsHTML(g.rating)}
-        <div class="m">${fmtHours(g) ? '<span>⏱ ' + esc(fmtHours(g)) + '</span>' : ''}${fmtDate(g) ? '<span>📅 ' + esc(fmtDate(g)) + '</span>' : ''}${g.song?.title ? '<span>🎵</span>' : ''}</div></div>
+        <div class="m">${fmtHours(g) ? '<span>⏱ ' + esc(fmtHours(g)) + '</span>' : ''}${fmtDate(g) ? '<span>📅 ' + esc(fmtDate(g)) + '</span>' : ''}${g.song?.title ? '<span>🎵</span>' : ''}${socBadge(g.id)}</div></div>
     </button>`;
   }).join('') : `<div class="empty">Aún no te has pasado nada en ${curYear}. ¡A darle! 🕹️</div>`;
 
@@ -688,8 +720,10 @@ function openDetail(id){
   const tags = [inList(Y.best, g.title) ? '🏆 De lo mejor del año' : '', inList(Y.worst, g.title) ? '💀 De lo peor del año' : '', g.replayed ? '↻ Rejugado' : ''].filter(Boolean);
   const h = g.hltb;
   const m = $('#modal');
-  m.innerHTML = `<div class="wcard detail">
+  const social = ME && VIEWING;
+  m.innerHTML = `<div class="wcard detail ${social ? 'wide' : ''}">
     <div class="hero" style="height:220px;${heroOf(g) ? `background-image:url('${esc(heroOf(g))}')` : ''}"></div>
+    <div class="${social ? 'split' : ''}"><div>
     <div class="wtop" style="margin-top:-8px"><b style="font-size:24px;line-height:1.2">${esc(g.title)}</b><button class="x" data-c>✕</button></div>
     ${tags.length ? `<div class="chips">${tags.map(t => `<span class="chip" style="padding:6px 12px">${t}</span>`).join('')}</div>` : ''}
     <dl>
@@ -699,11 +733,122 @@ function openDetail(id){
       <dt>Tema favorito</dt><dd>${g.song?.title ? esc(g.song.title) + ' ' + (g.song.videoId ? '<button class="linkbtn" id="dPlay">▶ Escuchar</button>' : `<a class="linkbtn" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${encodeURIComponent(g.title + ' ' + g.song.title)}">▶ Buscar en YouTube</a>`) : '—'}</dd>
     </dl>
     ${g.comment ? `<div class="cm">${esc(g.comment)}</div>` : ''}
+    </div>${social ? '<aside class="social" id="soc"></aside>' : ''}</div>
   </div>`;
   m.classList.add('show');
+  if (social) mountSocial(m.querySelector('#soc'), VIEWING.user, VIEWING.display, g);
   m.querySelector('[data-c]').onclick = () => m.classList.remove('show');
   m.onclick = e => { if (e.target === m) m.classList.remove('show'); };
   m.querySelector('#dPlay')?.addEventListener('click', () => playSong(g.song.videoId, g.song.title));
+}
+
+/* ================= comentarios y temas recomendados por los colegas ================= */
+const SOC_SUM = {};   // dueño → {t: cuándo se pidió, d: {idJuego: {c, r}}}
+function socOwner(){ return VIEWING ? VIEWING.user : ME?.user; }
+function socBadge(gid){
+  const o = socOwner(); const s = o && SOC_SUM[o]?.d?.[gid];
+  if (!s) return '';
+  return `<span class="badge2" title="${s.c} comentario${s.c === 1 ? '' : 's'} · ${s.r} tema${s.r === 1 ? '' : 's'} recomendado${s.r === 1 ? '' : 's'}">${s.c ? '💬 ' + s.c : ''}${s.c && s.r ? ' ' : ''}${s.r ? '🎶 ' + s.r : ''}</span>`;
+}
+function ensureSocialSummary(force){
+  const o = socOwner(); if (!o || !ME) return;
+  const c = SOC_SUM[o];
+  if (!force && c && (c.loading || Date.now() - c.t < 60000)) return;
+  SOC_SUM[o] = {...(c || {}), loading: true, t: Date.now()};
+  api('social_summary', {params: {owner: o}})
+    .then(d => { SOC_SUM[o] = {t: Date.now(), d}; if (socOwner() === o) render(); })
+    .catch(() => { SOC_SUM[o] = {t: Date.now(), d: c?.d || {}}; });
+}
+function ago(ts){
+  const s = (Date.now() - new Date(ts)) / 1000;
+  const rtf = new Intl.RelativeTimeFormat('es', {numeric: 'auto'});
+  if (s < 60) return 'ahora mismo';
+  if (s < 3600) return rtf.format(-Math.round(s / 60), 'minute');
+  if (s < 86400) return rtf.format(-Math.round(s / 3600), 'hour');
+  if (s < 86400 * 30) return rtf.format(-Math.round(s / 86400), 'day');
+  return new Date(ts).toLocaleDateString('es-ES', {day: 'numeric', month: 'short', year: 'numeric'});
+}
+function mountSocial(el, owner, ownerDisplay, g, opts = {}){
+  const isOwner = owner === ME.user;
+  let data = {comments: [], recs: []}; const pst = {};
+  el.innerHTML = `
+    <h3>💬 Comentarios <small class="ccount"></small></h3>
+    <div class="clist"><div class="socempty">Cargando…</div></div>
+    <div class="cform"><textarea maxlength="1000" placeholder="${isOwner ? 'Contesta a los colegas…' : 'Dile algo a ' + esc(ownerDisplay) + '…'}"></textarea>
+      <div class="row"><small class="hint" style="margin:0">Ctrl+Enter para enviar</small><button class="btn sm primary" data-send>Enviar</button></div></div>
+    <h3 style="margin-top:22px">🎶 Temas recomendados</h3>
+    <div class="rlist"></div>
+    ${isOwner ? '' : (CFG.youtube
+      ? `<button class="btn sm ghost" data-rec style="width:100%">🎵 Recomiéndale un tema</button><div class="picker rpk" style="display:none">${songPickerHTML(g.title)}</div>`
+      : `<div class="cform"><input class="addline" data-rectitle placeholder="Nombre del tema que le recomiendas"><button class="btn sm" data-recsend>Recomendar</button></div>`)}`;
+  const ta = el.querySelector('textarea');
+  const sync = d => {
+    data = d;
+    SOC_SUM[owner] ??= {t: Date.now(), d: {}};
+    SOC_SUM[owner].d ??= {};
+    if (d.comments.length || d.recs.length) SOC_SUM[owner].d[g.id] = {c: d.comments.length, r: d.recs.length}; else delete SOC_SUM[owner].d[g.id];
+    paint(); render();
+  };
+  const paint = () => {
+    if (!el.isConnected) return;
+    el.querySelector('.ccount').textContent = data.comments.length ? '· ' + data.comments.length : '';
+    el.querySelector('.clist').innerHTML = data.comments.length ? data.comments.map(c => `
+      <div class="cm1 ${c.user === owner ? 'own' : ''}"><span class="av" style="background:${avColor(c.user)}">${esc((c.display || c.user)[0])}</span>
+        <div class="bd">${c.user === ME.user || isOwner ? `<button class="xs" data-delc="${esc(c.id)}" title="Borrar">✕</button>` : ''}<b>${esc(c.display || c.user)}</b> <small>${esc(ago(c.ts))}</small><p>${esc(c.text)}</p></div></div>`).join('')
+      : `<p class="socempty">${isOwner ? 'Nadie ha comentado este juego todavía.' : 'Sé el primero en decirle algo.'}</p>`;
+    const cl = el.querySelector('.clist'); cl.scrollTop = cl.scrollHeight;
+    el.querySelector('.rlist').innerHTML = data.recs.length ? data.recs.map(r => `
+      <div class="rec"><span class="av" style="background:${avColor(r.user)}">${esc((r.display || r.user)[0])}</span>
+        <div class="tt"><b title="${esc(r.title)}">${esc(r.title)}</b><small>${r.user === ME.user ? '<span class="mine">tu recomendación</span>' : 'de ' + esc(r.display || r.user)} · ${esc(ago(r.ts))}</small></div>
+        ${r.videoId ? `<button class="btn sm ghost" data-playr="${esc(r.user)}" title="Escuchar">▶</button>` : `<a class="btn sm ghost" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${encodeURIComponent(g.title + ' ' + r.title)}" title="Buscar en YouTube">▶</a>`}
+        ${isOwner && opts.onUse ? `<button class="btn sm ghost" data-user="${esc(r.user)}" title="Usarlo como mi tema favorito">⭐</button>` : ''}
+        ${r.user === ME.user || isOwner ? `<button class="xs" data-delr="${esc(r.user)}" title="Quitar">✕</button>` : ''}</div>`).join('')
+      : `<p class="socempty">${isOwner ? 'Nadie te ha recomendado temas de este juego.' : 'Nadie ha recomendado nada aún.'}</p>`;
+    const mine = data.recs.find(r => r.user === ME.user);
+    const rb = el.querySelector('[data-rec]'); if (rb && el.querySelector('.rpk').style.display === 'none') rb.textContent = mine ? '🎵 Cambiar mi recomendación' : '🎵 Recomiéndale un tema';
+  };
+  const send = async () => {
+    const text = ta.value.trim(); if (!text) return;
+    const btn = el.querySelector('[data-send]'); btn.disabled = true;
+    try { sync(await api('comment', {body: {owner, id: g.id, text}})); ta.value = ''; }
+    catch (e) { toast(e.message); }
+    btn.disabled = false;
+  };
+  el.querySelector('[data-send]').onclick = send;
+  ta.onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); send(); } };
+  el.addEventListener('click', async e => {
+    const dc = e.target.closest('[data-delc]'), dr = e.target.closest('[data-delr]'), pr = e.target.closest('[data-playr]'), us = e.target.closest('[data-user]');
+    try {
+      if (dc){ if (confirm('¿Borrar este comentario?')) sync(await api('comment_del', {body: {owner, id: g.id, cid: dc.dataset.delc}})); }
+      else if (dr){ sync(await api('rec_del', {body: {owner, id: g.id, user: dr.dataset.delr}})); }
+      else if (pr){ const r = data.recs.find(x => x.user === pr.dataset.playr); if (r?.videoId) playSong(r.videoId, r.title); }
+      else if (us){ const r = data.recs.find(x => x.user === us.dataset.user); if (r) opts.onUse(r); }
+    } catch (err) { toast(err.message); }
+  });
+  // recomendar con el mismo selector de banda sonora del alta
+  const rb = el.querySelector('[data-rec]');
+  if (rb){
+    const pk = el.querySelector('.rpk'); let mounted = false;
+    rb.onclick = () => {
+      const open = pk.style.display === 'none';
+      pk.style.display = open ? '' : 'none';
+      rb.textContent = open ? '▴ Cerrar' : (data.recs.some(r => r.user === ME.user) ? '🎵 Cambiar mi recomendación' : '🎵 Recomiéndale un tema');
+      if (open && !mounted){
+        mounted = true;
+        mountSongPicker(pk, g.title, pst, () => data.recs.find(r => r.user === ME.user)?.videoId, async (vid, title) => {
+          playSong(vid, title);
+          try { sync(await api('rec', {body: {owner, id: g.id, title, videoId: vid}})); toast('🎶 Recomendado a ' + ownerDisplay); }
+          catch (err) { toast(err.message); }
+        });
+      }
+    };
+  }
+  const rs = el.querySelector('[data-recsend]');
+  if (rs) rs.onclick = async () => {
+    const t = el.querySelector('[data-rectitle]'); if (!t.value.trim()) return;
+    try { sync(await api('rec', {body: {owner, id: g.id, title: t.value.trim()}})); t.value = ''; } catch (err) { toast(err.message); }
+  };
+  api('social', {params: {owner, id: g.id}}).then(sync).catch(e => { el.querySelector('.clist').innerHTML = `<p class="socempty">⚠️ ${esc(e.message)}</p>`; });
 }
 
 /* ================= música (YouTube) ================= */
@@ -1096,8 +1241,10 @@ function mountSongPicker(root, game, st, getSel, onPick){
 function openEdit(id){
   const Y = yearObj(curYear), g = Y.games.find(x => x.id === id); if (!g) return;
   const m = $('#modal');
-  m.innerHTML = `<div class="wcard">
+  const social = !!ME && !VIEWING;
+  m.innerHTML = `<div class="wcard ${social ? 'wide' : ''}">
     <div class="hero" style="height:200px;${heroOf(g) ? `background-image:url('${esc(heroOf(g))}')` : ''}"></div>
+    <div class="${social ? 'split' : ''}"><div>
     <div class="wtop" style="margin-top:-8px"><b style="font-size:22px">${esc(g.title)}</b><button class="x" data-c>✕</button></div>
     <label class="field"><span>Título</span><input id="eT" value="${esc(g.title)}"></label>
     <div class="field"><span>Imagen</span><div class="row"><input id="eQ" class="addline" style="flex:1" placeholder="Buscar otra imagen…" value="${esc(g.title)}"><button class="btn sm" id="eS">Buscar</button></div><div class="imgpick" id="eP"></div></div>
@@ -1115,8 +1262,12 @@ function openEdit(id){
       <label class="chip" style="padding:8px 14px"><input type="checkbox" id="eW" ${inList(Y.worst, g.title) ? 'checked' : ''}> 💀 Menos disfrutados</label>
     </div>
     <div class="wnav"><button class="btn danger" id="eDel">🗑 Borrar</button><div class="row">${g.song?.videoId ? '<button class="btn ghost" id="ePlay">▶ Escuchar</button>' : ''}<button class="btn primary" id="eOk">Guardar</button></div></div>
+    </div>${social ? '<aside class="social" id="soc"></aside>' : ''}</div>
   </div>`;
   m.classList.add('show');
+  if (social) mountSocial(m.querySelector('#soc'), ME.user, ME.display || ME.user, g, {
+    onUse: r => { m.querySelector('#eST').value = r.title; m.querySelector('#eSU').value = r.videoId ? 'https://youtu.be/' + r.videoId : ''; toast('Puesto como tu tema favorito: pulsa Guardar'); }
+  });
   const close = () => { m.classList.remove('show'); };
   m.querySelector('[data-c]').onclick = close;
   m.onclick = e => { if (e.target === m) close(); };

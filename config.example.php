@@ -7,4 +7,5 @@ return [
   'rawg_key'    => '',   // https://rawg.io/apidocs
   'youtube_key' => '',   // Google Cloud Console -> YouTube Data API v3 -> Credenciales -> Clave de API
   'invite_code' => '',   // código para poder crear cuenta; vacío = registro abierto
+  // 'session_name' => 'creditos_dev',   // solo en una copia de pruebas en el mismo servidor
 ];
