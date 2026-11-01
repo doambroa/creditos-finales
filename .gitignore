@@ -1,0 +1,6 @@
+# claves y datos de los usuarios: nunca al repo
+config.php
+data/
+covers/
+*.bak
+*.bak.json
