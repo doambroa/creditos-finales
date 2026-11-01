@@ -1,2 +1,10 @@
 DirectoryIndex index.html
 Options -Indexes
+
+# La página se comprueba con el servidor en cada visita (si no cambió, responde 304):
+# así una versión nueva llega a todos sin tener que pulsar Ctrl+F5.
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
