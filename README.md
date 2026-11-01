@@ -36,3 +36,9 @@ Si las búsquedas fallan en Windows, revisa que en `php.ini` esté `curl.cainfo`
 - Si el servidor no responde, sale un aviso rojo y los cambios quedan solo en el navegador → usa *Exportar JSON*.
 - Si una carátula no acierta: pincha el juego → *Buscar otra imagen*.
 - Truco: en la tarjeta de nota, si ya tiene 5 estrellas y vuelves a pinchar la quinta, sube a 6 (como Expedition 33).
+
+## Licencia
+
+Dominio público ([The Unlicense](LICENSE)): haz lo que quieras con este código, sin pedir permiso ni citar a nadie.
+
+Los datos e imágenes que la app obtiene de servicios externos (RAWG, HowLongToBeat y YouTube) siguen sujetos a las condiciones de cada servicio.
